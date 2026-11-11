@@ -1,0 +1,12 @@
+meta {
+  name: Gateway Health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{gatewayUrl}}/api/v1/health
+  body: none
+  auth: none
+}
+

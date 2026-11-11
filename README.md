@@ -55,3 +55,11 @@ cd services/ai-service
 uv run python main.py
 # Running on http://127.0.0.1:8000 (Swagger docs at /docs)
 ```
+
+### 3. Test & Start the Core Gateway Service (Java 21 / Spring Boot)
+```bash
+cd services/core-service
+./mvnw test
+./mvnw spring-boot:run
+# Running on http://127.0.0.1:8080
+```

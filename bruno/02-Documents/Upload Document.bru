@@ -1,0 +1,22 @@
+meta {
+  name: Upload Document
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{gatewayUrl}}/api/v1/documents/upload
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  file: @file(/Users/david.guzman/Documents/projects/local-rag/services/ai-service/samples/python_asyncio.md)
+}
+
+script:post-response {
+  if (res.status === 200 && res.body && res.body.document_id) {
+    bru.setEnvVar("documentId", res.body.document_id);
+  }
+}
+

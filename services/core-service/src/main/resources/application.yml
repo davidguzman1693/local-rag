@@ -1,0 +1,25 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: core-service
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+  mvc:
+    async:
+      request-timeout: 180000
+
+local-rag:
+  ai-service:
+    base-url: ${AI_SERVICE_URL:http://127.0.0.1:8000}
+    timeout-seconds: 120
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+

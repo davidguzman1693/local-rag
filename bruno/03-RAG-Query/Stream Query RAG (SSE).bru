@@ -1,0 +1,25 @@
+meta {
+  name: Stream Query RAG (SSE)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{gatewayUrl}}/api/v1/query/stream
+  body: json
+  auth: none
+}
+
+headers {
+  Accept: text/event-stream
+}
+
+body:json {
+  {
+    "query": "What is the difference between coroutines and tasks in asyncio?",
+    "top_k": 4,
+    "stream": true,
+    "session_id": "{{sessionId}}"
+  }
+}
+
