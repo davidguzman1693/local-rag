@@ -1,0 +1,12 @@
+meta {
+  name: Delete Document
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{gatewayUrl}}/api/v1/documents/{{documentId}}
+  body: none
+  auth: none
+}
+

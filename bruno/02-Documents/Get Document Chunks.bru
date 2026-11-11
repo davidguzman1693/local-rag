@@ -1,0 +1,12 @@
+meta {
+  name: Get Document Chunks
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{gatewayUrl}}/api/v1/documents/{{documentId}}/chunks
+  body: none
+  auth: none
+}
+
