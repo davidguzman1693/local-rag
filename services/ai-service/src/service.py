@@ -6,7 +6,7 @@ from chunkers import RecursiveCharacterChunker
 from config import settings
 from embeddings import EmbeddingService
 from loaders import DocumentLoader
-from schemas import Citation, IngestResponse, QueryResponse
+from schemas import Citation, IngestResponse, QueryResponse, RetrievalStageItem, SearchDebugResponse
 from search import HybridRetriever
 from storage import VectorStore
 from synthesis import OllamaClient, build_rag_prompt
@@ -100,6 +100,113 @@ class RagService:
         # 4. Cross-encoder re-ranking
         reranked_chunks = self.retriever.rerank(query, fused_candidates, top_k=target_k)
         return reranked_chunks
+
+    def debug_retrieve(self, query: str, top_k: Optional[int] = None) -> SearchDebugResponse:
+        """Executes all 4 retrieval stages and returns intermediate rankings and scores."""
+        start_time = time.perf_counter()
+        target_k = top_k or settings.rerank_top_k
+        candidate_k = max(target_k, settings.vector_search_top_k)
+
+        # Stage 1: Dense Vector Search (LanceDB cosine distance -> similarity = 1 - distance)
+        query_vector = self.embedding_service.embed_query(query)
+        raw_dense = self.vector_store.search_vector(query_vector, top_k=candidate_k)
+        dense_rank_map: Dict[str, int] = {}
+        dense_items: List[RetrievalStageItem] = []
+
+        for rank, c in enumerate(raw_dense, start=1):
+            cid = c["id"]
+            dense_rank_map[cid] = rank
+            similarity = max(0.0, 1.0 - float(c.get("_distance", 0.0)))
+            dense_items.append(
+                RetrievalStageItem(
+                    chunk_id=cid,
+                    document_id=c.get("document_id", ""),
+                    source_filename=c.get("source_filename", "unknown"),
+                    chunk_index=c.get("chunk_index", 0),
+                    page_number=c.get("page_number", 1),
+                    text=c.get("text", ""),
+                    rank=rank,
+                    score=round(similarity, 4),
+                    dense_rank=rank,
+                )
+            )
+
+        # Stage 2: Sparse BM25 Keyword Search
+        raw_bm25 = self.retriever.sparse_search(query, top_k=candidate_k)
+        bm25_rank_map: Dict[str, int] = {}
+        bm25_items: List[RetrievalStageItem] = []
+
+        for rank, c in enumerate(raw_bm25, start=1):
+            cid = c["id"]
+            bm25_rank_map[cid] = rank
+            bm25_items.append(
+                RetrievalStageItem(
+                    chunk_id=cid,
+                    document_id=c.get("document_id", ""),
+                    source_filename=c.get("source_filename", "unknown"),
+                    chunk_index=c.get("chunk_index", 0),
+                    page_number=c.get("page_number", 1),
+                    text=c.get("text", ""),
+                    rank=rank,
+                    score=round(float(c.get("_bm25_score", 0.0)), 4),
+                    bm25_rank=rank,
+                )
+            )
+
+        # Stage 3: Hybrid Reciprocal Rank Fusion (RRF)
+        fused_candidates = self.retriever.hybrid_search(query, raw_dense, top_k=candidate_k)
+        rrf_items: List[RetrievalStageItem] = []
+        for rank, c in enumerate(fused_candidates, start=1):
+            cid = c["id"]
+            d_rank = dense_rank_map.get(cid)
+            b_rank = bm25_rank_map.get(cid)
+            rrf_score = (1.0 / (60 + d_rank) if d_rank else 0.0) + (
+                1.0 / (60 + b_rank) if b_rank else 0.0
+            )
+            rrf_items.append(
+                RetrievalStageItem(
+                    chunk_id=cid,
+                    document_id=c.get("document_id", ""),
+                    source_filename=c.get("source_filename", "unknown"),
+                    chunk_index=c.get("chunk_index", 0),
+                    page_number=c.get("page_number", 1),
+                    text=c.get("text", ""),
+                    rank=rank,
+                    score=round(rrf_score, 4),
+                    dense_rank=d_rank,
+                    bm25_rank=b_rank,
+                )
+            )
+
+        # Stage 4: Cross-Encoder Re-Ranking (FlashRank)
+        reranked_chunks = self.retriever.rerank(query, fused_candidates, top_k=target_k)
+        reranked_items: List[RetrievalStageItem] = []
+        for rank, c in enumerate(reranked_chunks, start=1):
+            cid = c["id"]
+            reranked_items.append(
+                RetrievalStageItem(
+                    chunk_id=cid,
+                    document_id=c.get("document_id", ""),
+                    source_filename=c.get("source_filename", "unknown"),
+                    chunk_index=c.get("chunk_index", 0),
+                    page_number=c.get("page_number", 1),
+                    text=c.get("text", ""),
+                    rank=rank,
+                    score=round(float(c.get("relevance_score", 0.0)), 4),
+                    dense_rank=dense_rank_map.get(cid),
+                    bm25_rank=bm25_rank_map.get(cid),
+                )
+            )
+
+        retrieval_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        return SearchDebugResponse(
+            query=query,
+            retrieval_time_ms=retrieval_time_ms,
+            dense_results=dense_items[:target_k],
+            bm25_results=bm25_items[:target_k],
+            rrf_results=rrf_items[:target_k],
+            reranked_results=reranked_items,
+        )
 
     async def answer_query(self, query: str, top_k: Optional[int] = None) -> QueryResponse:
         """Runs retrieval + LLM synthesis and returns a completed answer with citations."""

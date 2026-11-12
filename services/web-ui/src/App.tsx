@@ -12,6 +12,7 @@ import {
 } from "./api";
 import { ChatPanel } from "./components/ChatPanel";
 import { ChunkInspectorModal } from "./components/ChunkInspectorModal";
+import { RetrievalDebugger } from "./components/RetrievalDebugger";
 import type {
   ChatMessage,
   ChatSession,
@@ -24,6 +25,7 @@ import "./App.css";
 
 export function App() {
   // 1. System & Sidebar State
+  const [activeTab, setActiveTab] = useState<"chat" | "debugger">("chat");
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -223,6 +225,25 @@ export function App() {
           <span className="brand-tag">Java 21 &bull; Python 3.13 &bull; TypeScript</span>
         </div>
 
+        <div className="mode-tabs">
+          <button
+            type="button"
+            className={`mode-tab ${activeTab === "chat" ? "mode-tab-active" : ""}`}
+            onClick={() => setActiveTab("chat")}
+          >
+            Chat Workspace
+          </button>
+          <button
+            type="button"
+            className={`mode-tab ${
+              activeTab === "debugger" ? "mode-tab-active" : ""
+            }`}
+            onClick={() => setActiveTab("debugger")}
+          >
+            Retrieval Debugger
+          </button>
+        </div>
+
         <div className="status-pills">
           <span
             className={`status-badge ${
@@ -360,13 +381,17 @@ export function App() {
           </section>
         </aside>
 
-        {/* Right Main Area: Streaming RAG Chat */}
+        {/* Right Main Area: Streaming RAG Chat or Retrieval Debugger */}
         <main className="main-panel">
-          <ChatPanel
-            messages={messages}
-            isStreaming={isStreaming}
-            onSendMessage={handleSendMessage}
-          />
+          {activeTab === "chat" ? (
+            <ChatPanel
+              messages={messages}
+              isStreaming={isStreaming}
+              onSendMessage={handleSendMessage}
+            />
+          ) : (
+            <RetrievalDebugger />
+          )}
         </main>
       </div>
 

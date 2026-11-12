@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from config import settings
-from schemas import IngestResponse, QueryRequest, QueryResponse
+from schemas import IngestResponse, QueryRequest, QueryResponse, SearchDebugResponse
 from service import RagService
 
 router = APIRouter(prefix="/api/v1")
@@ -83,6 +83,19 @@ async def delete_document(document_id: str):
     all_chunks = service.vector_store.get_all_chunks()
     service.retriever.update_bm25_corpus(all_chunks)
     return {"message": f"Document {document_id} successfully deleted."}
+
+
+@router.post("/search/debug", response_model=SearchDebugResponse)
+async def debug_search(request: QueryRequest):
+    """Returns side-by-side Dense Vector, BM25, RRF, and Cross-Encoder Re-ranked results without calling the LLM."""
+    service = get_rag_service()
+    try:
+        return service.debug_retrieve(request.query, top_k=request.top_k)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Debug search failed: {e}",
+        )
 
 
 @router.post("/query", response_model=QueryResponse)

@@ -1,0 +1,19 @@
+meta {
+  name: Debug Retrieval Stages
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{gatewayUrl}}/api/v1/query/debug
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "query": "How does the event loop work in Python asyncio?",
+    "top_k": 4
+  }
+}
+

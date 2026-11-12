@@ -81,3 +81,25 @@ export type StreamEvent =
   | { type: "done" }
   | { type: "error"; message: string };
 
+export interface RetrievalStageItem {
+  chunk_id: string;
+  document_id: string;
+  source_filename: string;
+  chunk_index: number;
+  page_number: number;
+  text: string;
+  rank: number;
+  score: number;
+  dense_rank?: number | null;
+  bm25_rank?: number | null;
+}
+
+export interface SearchDebugResponse {
+  query: string;
+  retrieval_time_ms: number;
+  dense_results: RetrievalStageItem[];
+  bm25_results: RetrievalStageItem[];
+  rrf_results: RetrievalStageItem[];
+  reranked_results: RetrievalStageItem[];
+}
+
