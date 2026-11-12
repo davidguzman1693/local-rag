@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from config import settings
-from schemas import IngestResponse, QueryRequest, QueryResponse, SearchDebugResponse
+from schemas import IngestResponse, ModelListResponse, QueryRequest, QueryResponse, SearchDebugResponse
 from service import RagService
 
 router = APIRouter(prefix="/api/v1")
@@ -98,6 +98,13 @@ async def debug_search(request: QueryRequest):
         )
 
 
+@router.get("/models", response_model=ModelListResponse)
+async def list_models():
+    """Lists all available Ollama models installed locally on the host."""
+    service = get_rag_service()
+    return await service.list_available_models()
+
+
 @router.post("/query", response_model=QueryResponse)
 async def query_rag(request: QueryRequest):
     """Standard non-streaming question answering with citations."""
@@ -107,6 +114,8 @@ async def query_rag(request: QueryRequest):
             request.query,
             top_k=request.top_k,
             history=request.history,
+            model=request.model,
+            temperature=request.temperature,
         )
         return response
     except Exception as e:
@@ -127,6 +136,8 @@ async def query_rag_stream(request: QueryRequest):
                 request.query,
                 top_k=request.top_k,
                 history=request.history,
+                model=request.model,
+                temperature=request.temperature,
             ):
                 yield f"data: {json.dumps(event)}\n\n"
         except Exception as e:

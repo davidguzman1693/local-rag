@@ -3,6 +3,7 @@ import type {
   ChunkRecord,
   DocumentSummary,
   IngestResponse,
+  ModelListResponse,
   SearchDebugResponse,
   StreamEvent,
   SystemHealth,
@@ -105,6 +106,14 @@ export async function deleteSession(sessionId: string): Promise<void> {
   }
 }
 
+export async function fetchAvailableModels(): Promise<ModelListResponse> {
+  const response = await fetch(`${GATEWAY_BASE_URL}/api/v1/models`);
+  if (!response.ok) {
+    throw new Error(`Failed to load models (${response.status})`);
+  }
+  return response.json();
+}
+
 export async function debugRetrieval(
   query: string,
   topK: number = 4
@@ -130,7 +139,11 @@ export async function debugRetrieval(
 export async function streamRagQuery(
   query: string,
   sessionId: string | null,
-  onEvent: (event: StreamEvent) => void
+  options: {
+    model?: string;
+    temperature?: number;
+  } = {},
+  onEvent: (event: StreamEvent) => void = () => {}
 ): Promise<void> {
   const response = await fetch(`${GATEWAY_BASE_URL}/api/v1/query/stream`, {
     method: "POST",
@@ -143,6 +156,8 @@ export async function streamRagQuery(
       top_k: 4,
       stream: true,
       session_id: sessionId,
+      model: options.model || undefined,
+      temperature: options.temperature !== undefined ? options.temperature : undefined,
     }),
   });
 

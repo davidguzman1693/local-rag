@@ -67,6 +67,26 @@ class QueryRequest(BaseModel):
         default=None,
         description="Optional prior conversation turns for multi-turn follow-up questions",
     )
+    model: Optional[str] = Field(default=None, description="Ollama model override")
+    temperature: Optional[float] = Field(default=None, description="Generation temperature override (0.0 to 1.0)")
+
+
+class ModelDetails(BaseModel):
+    parameter_size: Optional[str] = None
+    quantization_level: Optional[str] = None
+    family: Optional[str] = None
+
+
+class OllamaModelInfo(BaseModel):
+    name: str
+    size: int
+    modified_at: Optional[str] = None
+    details: Optional[ModelDetails] = None
+
+
+class ModelListResponse(BaseModel):
+    models: List[OllamaModelInfo]
+    current_default: str
 
 
 class QueryResponse(BaseModel):

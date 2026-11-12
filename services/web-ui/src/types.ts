@@ -48,6 +48,8 @@ export interface ChatMessage {
   content: string;
   citations: Citation[];
   timestamp: string;
+  model?: string;
+  temperature?: number;
 }
 
 export interface ChatSession {
@@ -56,6 +58,24 @@ export interface ChatSession {
   created_at: string;
   updated_at: string;
   messages: ChatMessage[];
+}
+
+export interface ModelDetails {
+  parameter_size?: string;
+  quantization_level?: string;
+  family?: string;
+}
+
+export interface OllamaModelInfo {
+  name: string;
+  size: number;
+  modified_at?: string;
+  details?: ModelDetails;
+}
+
+export interface ModelListResponse {
+  models: OllamaModelInfo[];
+  current_default: string;
 }
 
 export interface SystemHealth {

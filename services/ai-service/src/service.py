@@ -10,6 +10,9 @@ from schemas import (
     Citation,
     ConversationMessage,
     IngestResponse,
+    ModelDetails,
+    ModelListResponse,
+    OllamaModelInfo,
     QueryResponse,
     RetrievalStageItem,
     SearchDebugResponse,
@@ -228,11 +231,37 @@ class RagService:
             return query
         return f"{prior_user_queries[-1]} {query}"
 
+    async def list_available_models(self) -> ModelListResponse:
+        """Fetches installed Ollama models and identifies the current active model."""
+        raw_models = await self.ollama.list_models()
+        model_infos: List[OllamaModelInfo] = []
+        for m in raw_models:
+            details_data = m.get("details", {}) or {}
+            details = ModelDetails(
+                parameter_size=details_data.get("parameter_size"),
+                quantization_level=details_data.get("quantization_level"),
+                family=details_data.get("family"),
+            )
+            model_infos.append(
+                OllamaModelInfo(
+                    name=m.get("name", ""),
+                    size=m.get("size", 0),
+                    modified_at=m.get("modified_at"),
+                    details=details,
+                )
+            )
+        return ModelListResponse(
+            models=model_infos,
+            current_default=self.ollama.model,
+        )
+
     async def answer_query(
         self,
         query: str,
         top_k: Optional[int] = None,
         history: Optional[List[ConversationMessage]] = None,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
     ) -> QueryResponse:
         """Runs retrieval + LLM synthesis and returns a completed answer with citations."""
         start_time = time.perf_counter()
@@ -246,7 +275,9 @@ class RagService:
         prompt, citations = build_rag_prompt(query, context_chunks, history=history)
 
         # Generate answer from Ollama
-        answer = await self.ollama.generate(prompt, temperature=settings.temperature)
+        target_model = model or self.ollama.model
+        temp = temperature if temperature is not None else settings.temperature
+        answer = await self.ollama.generate(prompt, temperature=temp, model=target_model)
         total_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
         return QueryResponse(
@@ -255,7 +286,7 @@ class RagService:
             citations=citations,
             retrieval_time_ms=retrieval_time_ms,
             total_time_ms=total_time_ms,
-            model_used=self.ollama.model,
+            model_used=target_model,
         )
 
     async def stream_query(
@@ -263,20 +294,26 @@ class RagService:
         query: str,
         top_k: Optional[int] = None,
         history: Optional[List[ConversationMessage]] = None,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Streams generated tokens and yields citations as metadata."""
         search_query = self._build_contextual_search_query(query, history)
         context_chunks = self.retrieve_context(search_query, top_k)
         prompt, citations = build_rag_prompt(query, context_chunks, history=history)
 
+        target_model = model or self.ollama.model
+        temp = temperature if temperature is not None else settings.temperature
+
         # Yield citations first so the client can render source badges
         yield {
             "type": "citations",
             "citations": [c.model_dump() for c in citations],
+            "model": target_model,
         }
 
         # Stream generated tokens
-        async for token in self.ollama.generate_stream(prompt, temperature=settings.temperature):
+        async for token in self.ollama.generate_stream(prompt, temperature=temp, model=target_model):
             yield {
                 "type": "token",
                 "token": token,
