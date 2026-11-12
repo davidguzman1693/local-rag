@@ -4,8 +4,8 @@ GATEWAY_PORT ?= 8080
 AI_PORT ?= 8000
 UI_PORT ?= 5173
 
-LOG_DIR := .logs
-PID_DIR := .pids
+LOG_DIR := $(CURDIR)/.logs
+PID_DIR := $(CURDIR)/.pids
 
 help: ## Show available commands
 	@echo "Local RAG — Polyglot Orchestration Commands"
@@ -13,28 +13,37 @@ help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 start: ## Start all 3 services (ai-service, core-service, web-ui) in the background
-	@mkdir -p $(LOG_DIR) $(PID_DIR)
+	@mkdir -p "$(LOG_DIR)" "$(PID_DIR)"
 	@echo "1/3 Starting Python AI Service on :$(AI_PORT)..."
 	@if curl -sf http://127.0.0.1:$(AI_PORT)/health >/dev/null 2>&1; then \
 		echo "    ai-service is already healthy on :$(AI_PORT)"; \
 	else \
-		cd services/ai-service && LOCAL_RAG_PORT=$(AI_PORT) nohup uv run python main.py > ../../$(LOG_DIR)/ai-service.log 2>&1 & echo $$! > ../../$(PID_DIR)/ai-service.pid; \
-		echo "    ai-service started (logs: $(LOG_DIR)/ai-service.log)"; \
+		(cd services/ai-service && LOCAL_RAG_PORT=$(AI_PORT) nohup uv run python main.py > "$(LOG_DIR)/ai-service.log" 2>&1 & echo $$! > "$(PID_DIR)/ai-service.pid"); \
+		echo "    ai-service started (logs: .logs/ai-service.log)"; \
 	fi
 	@echo "2/3 Starting Java Core Gateway on :$(GATEWAY_PORT)..."
 	@if curl -sf http://127.0.0.1:$(GATEWAY_PORT)/api/v1/health >/dev/null 2>&1; then \
 		echo "    core-service is already healthy on :$(GATEWAY_PORT)"; \
 	else \
-		cd services/core-service && SERVER_PORT=$(GATEWAY_PORT) AI_SERVICE_URL=http://127.0.0.1:$(AI_PORT) nohup ./mvnw spring-boot:run > ../../$(LOG_DIR)/core-service.log 2>&1 & echo $$! > ../../$(PID_DIR)/core-service.pid; \
-		echo "    core-service started (logs: $(LOG_DIR)/core-service.log)"; \
+		(cd services/core-service && SERVER_PORT=$(GATEWAY_PORT) AI_SERVICE_URL=http://127.0.0.1:$(AI_PORT) nohup ./mvnw spring-boot:run > "$(LOG_DIR)/core-service.log" 2>&1 & echo $$! > "$(PID_DIR)/core-service.pid"); \
+		echo "    core-service started (logs: .logs/core-service.log)"; \
 	fi
 	@echo "3/3 Starting React Web UI on :$(UI_PORT)..."
 	@if curl -sf http://localhost:$(UI_PORT) >/dev/null 2>&1; then \
 		echo "    web-ui is already running on :$(UI_PORT)"; \
 	else \
-		cd services/web-ui && VITE_GATEWAY_URL=http://localhost:$(GATEWAY_PORT) nohup npm run dev -- --port $(UI_PORT) > ../../$(LOG_DIR)/web-ui.log 2>&1 & echo $$! > ../../$(PID_DIR)/web-ui.pid; \
-		echo "    web-ui started (logs: $(LOG_DIR)/web-ui.log)"; \
+		(cd services/web-ui && VITE_GATEWAY_URL=http://localhost:$(GATEWAY_PORT) nohup npm run dev -- --port $(UI_PORT) > "$(LOG_DIR)/web-ui.log" 2>&1 & echo $$! > "$(PID_DIR)/web-ui.pid"); \
+		echo "    web-ui started (logs: .logs/web-ui.log)"; \
 	fi
+	@printf "Waiting for Core Gateway (:$(GATEWAY_PORT)) to finish booting"
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
+		if curl -sf http://127.0.0.1:$(GATEWAY_PORT)/api/v1/health >/dev/null 2>&1; then \
+			break; \
+		fi; \
+		printf "."; \
+		sleep 1; \
+	done
+	@echo " READY!"
 	@echo ""
 	@echo "All services launched!"
 	@echo "  - Web UI:       http://localhost:$(UI_PORT)"
@@ -50,9 +59,15 @@ stop: ## Stop all background services
 			if kill -0 $$pid 2>/dev/null; then \
 				pkill -P $$pid 2>/dev/null || true; \
 				kill $$pid 2>/dev/null || true; \
-				echo "  Stopped $$svc (PID $$pid)"; \
 			fi; \
 			rm -f $(PID_DIR)/$$svc.pid; \
+		fi; \
+	done
+	@for port in $(UI_PORT) $(GATEWAY_PORT) $(AI_PORT); do \
+		pids=$$(lsof -ti :$$port -sTCP:LISTEN 2>/dev/null || true); \
+		if [ -n "$$pids" ]; then \
+			kill $$pids 2>/dev/null || true; \
+			echo "  Stopped service on port :$$port (PID $$pids)"; \
 		fi; \
 	done
 

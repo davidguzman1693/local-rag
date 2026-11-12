@@ -60,13 +60,20 @@ export function App() {
       setHealth(healthData);
       setDocuments(docsData);
       setSessions(sessionsData);
+      if (!activeSessionId && sessionsData.length > 0) {
+        setActiveSessionId(sessionsData[0].id);
+        setMessages(sessionsData[0].messages);
+      }
       setErrorBanner(null);
     } catch (err) {
       setErrorBanner(
         err instanceof Error
-          ? err.message
-          : "Could not connect to core-service (:8080)"
+          ? `${err.message} (Retrying in 2s...)`
+          : "Could not connect to core-service (:8080) — retrying..."
       );
+      setTimeout(() => {
+        refreshAll();
+      }, 2000);
     }
   }
 
