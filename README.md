@@ -63,3 +63,11 @@ cd services/core-service
 ./mvnw spring-boot:run
 # Running on http://127.0.0.1:8080
 ```
+
+### 4. Start the Web UI (TypeScript + React / Vite)
+```bash
+cd services/web-ui
+npm install
+npm run dev
+# Running on http://localhost:5173
+```
