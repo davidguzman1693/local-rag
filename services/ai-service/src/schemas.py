@@ -67,3 +67,27 @@ class QueryResponse(BaseModel):
     retrieval_time_ms: float
     total_time_ms: float
     model_used: str
+
+
+class RetrievalStageItem(BaseModel):
+    """Single scored chunk inside one stage of the retrieval pipeline (for the Retrieval Debugger)."""
+    chunk_id: str
+    document_id: str
+    source_filename: str
+    chunk_index: int
+    page_number: int = 1
+    text: str
+    rank: int
+    score: float
+    dense_rank: Optional[int] = None
+    bm25_rank: Optional[int] = None
+
+
+class SearchDebugResponse(BaseModel):
+    """Side-by-side breakdown of all 4 retrieval stages without calling the LLM."""
+    query: str
+    retrieval_time_ms: float
+    dense_results: List[RetrievalStageItem]
+    bm25_results: List[RetrievalStageItem]
+    rrf_results: List[RetrievalStageItem]
+    reranked_results: List[RetrievalStageItem]

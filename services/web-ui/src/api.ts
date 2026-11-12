@@ -3,6 +3,7 @@ import type {
   ChunkRecord,
   DocumentSummary,
   IngestResponse,
+  SearchDebugResponse,
   StreamEvent,
   SystemHealth,
 } from "./types";
@@ -102,6 +103,22 @@ export async function deleteSession(sessionId: string): Promise<void> {
   if (!response.ok) {
     throw new Error(`Failed to delete session (${response.status})`);
   }
+}
+
+export async function debugRetrieval(
+  query: string,
+  topK: number = 4
+): Promise<SearchDebugResponse> {
+  const response = await fetch(`${GATEWAY_BASE_URL}/api/v1/query/debug`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, top_k: topK, stream: false }),
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Retrieval debug failed (${response.status}): ${errText}`);
+  }
+  return response.json();
 }
 
 /**

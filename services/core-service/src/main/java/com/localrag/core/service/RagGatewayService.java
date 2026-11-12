@@ -11,6 +11,7 @@ import com.localrag.core.model.DocumentSummary;
 import com.localrag.core.model.IngestResponse;
 import com.localrag.core.model.QueryRequest;
 import com.localrag.core.model.QueryResponse;
+import com.localrag.core.model.SearchDebugResponse;
 import com.localrag.core.persistence.DocumentMetadataEntity;
 import com.localrag.core.persistence.DocumentMetadataRepository;
 import org.springframework.http.codec.ServerSentEvent;
@@ -118,6 +119,10 @@ public class RagGatewayService {
                 aiResponse.citations()
         );
         return aiResponse.withSessionId(session.id());
+    }
+
+    public SearchDebugResponse debugSearch(QueryRequest request) {
+        return aiEngineClient.debugSearch(request);
     }
 
     public Flux<ServerSentEvent<String>> streamQuery(QueryRequest request) {

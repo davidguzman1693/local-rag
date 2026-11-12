@@ -26,6 +26,29 @@ class HybridRetriever:
         tokenized_corpus = [chunk["text"].lower().split() for chunk in chunks]
         self.bm25_index = BM25Okapi(tokenized_corpus)
 
+    def sparse_search(self, query: str, top_k: int = 15) -> List[Dict[str, Any]]:
+        """Runs standalone BM25 sparse keyword search and attaches _bm25_score."""
+        if not self.bm25_index or not self.corpus_chunks:
+            return []
+
+        tokenized_query = query.lower().split()
+        bm25_scores = self.bm25_index.get_scores(tokenized_query)
+
+        sorted_indices = sorted(
+            range(len(bm25_scores)),
+            key=lambda i: bm25_scores[i],
+            reverse=True,
+        )[:top_k]
+
+        results: List[Dict[str, Any]] = []
+        for idx in sorted_indices:
+            if bm25_scores[idx] <= 0:
+                continue
+            item = dict(self.corpus_chunks[idx])
+            item["_bm25_score"] = float(bm25_scores[idx])
+            results.append(item)
+        return results
+
     def hybrid_search(
         self,
         query: str,

@@ -35,9 +35,9 @@ start: ## Start all 3 services (ai-service, core-service, web-ui) in the backgro
 		(cd services/web-ui && VITE_GATEWAY_URL=http://localhost:$(GATEWAY_PORT) nohup npm run dev -- --port $(UI_PORT) > "$(LOG_DIR)/web-ui.log" 2>&1 & echo $$! > "$(PID_DIR)/web-ui.pid"); \
 		echo "    web-ui started (logs: .logs/web-ui.log)"; \
 	fi
-	@printf "Waiting for Core Gateway (:$(GATEWAY_PORT)) to finish booting"
+	@printf "Waiting for AI Service (:$(AI_PORT)) and Core Gateway (:$(GATEWAY_PORT)) to be ready"
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
-		if curl -sf http://127.0.0.1:$(GATEWAY_PORT)/api/v1/health >/dev/null 2>&1; then \
+		if curl -sf http://127.0.0.1:$(AI_PORT)/health >/dev/null 2>&1 && curl -sf http://127.0.0.1:$(GATEWAY_PORT)/api/v1/health >/dev/null 2>&1; then \
 			break; \
 		fi; \
 		printf "."; \
@@ -70,6 +70,7 @@ stop: ## Stop all background services
 			echo "  Stopped service on port :$$port (PID $$pids)"; \
 		fi; \
 	done
+	@sleep 1
 
 restart: stop start ## Restart all 3 services
 

@@ -5,6 +5,7 @@ import com.localrag.core.model.DocumentSummary;
 import com.localrag.core.model.IngestResponse;
 import com.localrag.core.model.QueryRequest;
 import com.localrag.core.model.QueryResponse;
+import com.localrag.core.model.SearchDebugResponse;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
@@ -131,6 +132,26 @@ public class AiEngineClient {
                     .block();
         } catch (WebClientResponseException e) {
             throw new AiServiceException("AI Engine query failed: " + e.getResponseBodyAsString(), e.getStatusCode());
+        } catch (Exception e) {
+            throw new AiServiceException("Error communicating with AI Engine: " + e.getMessage(), e);
+        }
+    }
+
+    public SearchDebugResponse debugSearch(QueryRequest request) {
+        try {
+            Map<String, Object> payload = request.topK() != null
+                    ? Map.of("query", request.query(), "top_k", request.topK(), "stream", false)
+                    : Map.of("query", request.query(), "stream", false);
+
+            return webClient.post()
+                    .uri("/api/v1/search/debug")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(payload)
+                    .retrieve()
+                    .bodyToMono(SearchDebugResponse.class)
+                    .block();
+        } catch (WebClientResponseException e) {
+            throw new AiServiceException("AI Engine debug search failed: " + e.getResponseBodyAsString(), e.getStatusCode());
         } catch (Exception e) {
             throw new AiServiceException("Error communicating with AI Engine: " + e.getMessage(), e);
         }
