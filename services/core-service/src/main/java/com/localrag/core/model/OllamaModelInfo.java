@@ -10,3 +10,4 @@ public record OllamaModelInfo(
         @JsonProperty("modified_at") String modifiedAt,
         @JsonProperty("details") ModelDetails details
 ) {}
+

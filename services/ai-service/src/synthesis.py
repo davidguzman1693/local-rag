@@ -113,7 +113,13 @@ class OllamaClient:
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(url, json=payload)
-            response.raise_for_status()
+            if response.status_code != 200:
+                try:
+                    err_json = response.json()
+                    err_msg = err_json.get("error", response.text)
+                except Exception:
+                    err_msg = response.text
+                raise RuntimeError(f"Ollama model '{target_model}' error ({response.status_code}): {err_msg}")
             data = response.json()
             return data.get("response", "")
 
@@ -135,7 +141,14 @@ class OllamaClient:
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream("POST", url, json=payload) as response:
-                response.raise_for_status()
+                if response.status_code != 200:
+                    err_bytes = await response.aread()
+                    try:
+                        err_json = json.loads(err_bytes.decode())
+                        err_msg = err_json.get("error", err_bytes.decode())
+                    except Exception:
+                        err_msg = err_bytes.decode()
+                    raise RuntimeError(f"Ollama model '{target_model}' error ({response.status_code}): {err_msg}")
                 async for line in response.aiter_lines():
                     if line:
                         chunk_json = json.loads(line)

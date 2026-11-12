@@ -9,3 +9,4 @@ public record ModelDetails(
         @JsonProperty("quantization_level") String quantizationLevel,
         @JsonProperty("family") String family
 ) {}
+

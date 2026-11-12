@@ -10,3 +10,4 @@ public record ModelListResponse(
         @JsonProperty("models") List<OllamaModelInfo> models,
         @JsonProperty("current_default") String currentDefault
 ) {}
+
