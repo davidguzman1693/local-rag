@@ -11,6 +11,8 @@ import com.localrag.core.model.DocumentSummary;
 import com.localrag.core.model.IngestResponse;
 import com.localrag.core.model.QueryRequest;
 import com.localrag.core.model.QueryResponse;
+import com.localrag.core.persistence.DocumentMetadataEntity;
+import com.localrag.core.persistence.DocumentMetadataRepository;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,27 +22,27 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class RagGatewayService {
 
     private final AiEngineClient aiEngineClient;
     private final ChatSessionService chatSessionService;
+    private final DocumentMetadataRepository documentMetadataRepository;
     private final ObjectMapper objectMapper;
-
-    private record LocalDocMetadata(Long fileSizeBytes, Instant uploadedAt) {}
-
-    private final Map<String, LocalDocMetadata> documentMetadataStore = new ConcurrentHashMap<>();
 
     public RagGatewayService(
             AiEngineClient aiEngineClient,
             ChatSessionService chatSessionService,
+            DocumentMetadataRepository documentMetadataRepository,
             ObjectMapper objectMapper
     ) {
         this.aiEngineClient = aiEngineClient;
         this.chatSessionService = chatSessionService;
+        this.documentMetadataRepository = documentMetadataRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -50,34 +52,46 @@ public class RagGatewayService {
         return Map.of(
                 "status", aiHealthy ? "healthy" : "degraded",
                 "gateway", "core-service",
+                "persistence", "h2-jpa",
                 "ai_engine", aiHealth,
                 "active_sessions", chatSessionService.listSessions().size()
         );
     }
 
     public IngestResponse uploadDocument(MultipartFile file) {
-        long size = file.getSize();
+        Long size = file.getSize();
         IngestResponse response = aiEngineClient.uploadDocument(file);
         if (response != null && response.documentId() != null) {
-            documentMetadataStore.put(response.documentId(), new LocalDocMetadata(size, Instant.now()));
+            documentMetadataRepository.save(new DocumentMetadataEntity(
+                    response.documentId(),
+                    response.filename() != null ? response.filename() : "unknown",
+                    size,
+                    Instant.now()
+            ));
         }
         return response;
     }
 
     public List<DocumentSummary> listDocuments() {
         List<DocumentSummary> rawDocs = aiEngineClient.listDocuments();
-        if (rawDocs == null) {
+        if (rawDocs == null || rawDocs.isEmpty()) {
             return List.of();
         }
+
+        Map<String, DocumentMetadataEntity> metadataMap = documentMetadataRepository.findAll().stream()
+                .collect(Collectors.toMap(DocumentMetadataEntity::getDocumentId, Function.identity()));
+
         return rawDocs.stream()
                 .map(doc -> {
-                    LocalDocMetadata meta = documentMetadataStore.get(doc.documentId());
+                    DocumentMetadataEntity meta = doc.documentId() != null
+                            ? metadataMap.get(doc.documentId())
+                            : null;
                     return new DocumentSummary(
                             doc.documentId(),
                             doc.sourceFilename(),
                             doc.chunkCount(),
-                            meta != null ? meta.fileSizeBytes() : doc.fileSizeBytes(),
-                            meta != null ? meta.uploadedAt() : doc.uploadedAt()
+                            meta != null ? meta.getFileSizeBytes() : doc.fileSizeBytes(),
+                            meta != null ? meta.getUploadedAt() : doc.uploadedAt()
                     );
                 })
                 .toList();
@@ -88,7 +102,9 @@ public class RagGatewayService {
     }
 
     public Map<String, Object> deleteDocument(String documentId) {
-        documentMetadataStore.remove(documentId);
+        if (documentId != null && documentMetadataRepository.existsById(documentId)) {
+            documentMetadataRepository.deleteById(documentId);
+        }
         return aiEngineClient.deleteDocument(documentId);
     }
 
@@ -147,4 +163,3 @@ public class RagGatewayService {
         return Flux.concat(Flux.just(sessionEvent), aiEventStream);
     }
 }
-
