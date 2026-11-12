@@ -1,6 +1,7 @@
 package com.localrag.core.client;
 
 import com.localrag.core.model.ChunkRecord;
+import com.localrag.core.model.ConversationTurn;
 import com.localrag.core.model.DocumentSummary;
 import com.localrag.core.model.IngestResponse;
 import com.localrag.core.model.QueryRequest;
@@ -18,6 +19,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -117,11 +119,9 @@ public class AiEngineClient {
         }
     }
 
-    public QueryResponse query(QueryRequest request) {
+    public QueryResponse query(QueryRequest request, List<ConversationTurn> history) {
         try {
-            Map<String, Object> payload = request.topK() != null
-                    ? Map.of("query", request.query(), "top_k", request.topK(), "stream", false)
-                    : Map.of("query", request.query(), "stream", false);
+            Map<String, Object> payload = buildQueryPayload(request, false, history);
 
             return webClient.post()
                     .uri("/api/v1/query")
@@ -139,9 +139,7 @@ public class AiEngineClient {
 
     public SearchDebugResponse debugSearch(QueryRequest request) {
         try {
-            Map<String, Object> payload = request.topK() != null
-                    ? Map.of("query", request.query(), "top_k", request.topK(), "stream", false)
-                    : Map.of("query", request.query(), "stream", false);
+            Map<String, Object> payload = buildQueryPayload(request, false, List.of());
 
             return webClient.post()
                     .uri("/api/v1/search/debug")
@@ -157,10 +155,8 @@ public class AiEngineClient {
         }
     }
 
-    public Flux<String> streamQuery(QueryRequest request) {
-        Map<String, Object> payload = request.topK() != null
-                ? Map.of("query", request.query(), "top_k", request.topK(), "stream", true)
-                : Map.of("query", request.query(), "stream", true);
+    public Flux<String> streamQuery(QueryRequest request, List<ConversationTurn> history) {
+        Map<String, Object> payload = buildQueryPayload(request, true, history);
 
         return webClient.post()
                 .uri("/api/v1/query/stream")
@@ -169,6 +165,23 @@ public class AiEngineClient {
                 .bodyValue(payload)
                 .retrieve()
                 .bodyToFlux(String.class);
+    }
+
+    private Map<String, Object> buildQueryPayload(
+            QueryRequest request,
+            boolean stream,
+            List<ConversationTurn> history
+    ) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("query", request.query());
+        payload.put("stream", stream);
+        if (request.topK() != null) {
+            payload.put("top_k", request.topK());
+        }
+        if (history != null && !history.isEmpty()) {
+            payload.put("history", history);
+        }
+        return payload;
     }
 }
 

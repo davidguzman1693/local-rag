@@ -61,7 +61,7 @@ class CoreServiceApplicationTests {
         );
 
         Citation citation = new Citation(1, "doc-1", "architecture.md", 0, 1, "RAG uses LanceDB...", 0.92);
-        when(mockClient.query(any())).thenReturn(new QueryResponse(
+        when(mockClient.query(any(), any())).thenReturn(new QueryResponse(
                 "How does RAG work?",
                 "RAG retrieves passages from LanceDB [1].",
                 List.of(citation),
@@ -82,14 +82,14 @@ class CoreServiceApplicationTests {
         assertThat(session.messages().get(1).role()).isEqualTo("assistant");
         assertThat(session.messages().get(1).citations()).hasSize(1);
 
-        // 2. Streaming query appends to the existing JPA session when stream completes
+        // 2. Streaming query passes prior conversation turns and appends to the existing JPA session when stream completes
         Flux<String> simulatedStream = Flux.just(
                 "{\"type\":\"citations\",\"citations\":[{\"citation_id\":1,\"document_id\":\"doc-1\",\"source_filename\":\"architecture.md\",\"chunk_index\":0,\"page_number\":1,\"snippet\":\"RAG...\",\"relevance_score\":0.95}]}",
                 "{\"type\":\"token\",\"token\":\"Streaming \"}",
                 "{\"type\":\"token\",\"token\":\"answer [1].\"}",
                 "{\"type\":\"done\"}"
         );
-        when(mockClient.streamQuery(any())).thenReturn(simulatedStream);
+        when(mockClient.streamQuery(any(), any())).thenReturn(simulatedStream);
 
         Flux<ServerSentEvent<String>> sseFlux = gatewayService.streamQuery(
                 new QueryRequest("Follow-up question", 4, true, session.id())

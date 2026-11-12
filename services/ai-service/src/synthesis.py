@@ -1,21 +1,32 @@
 import json
-from typing import Any, AsyncGenerator, Dict, List, Tuple
+import re
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 import httpx
-from schemas import Citation
+from schemas import Citation, ConversationMessage
 
 
 SYSTEM_PROMPT = """You are a helpful, precise AI assistant answering questions based strictly on the provided context passages.
 
 RULES:
-1. Rely ONLY on the provided context. Do NOT use outside knowledge or extrapolate facts.
-2. If the context does not contain enough information to answer the question, clearly state: "Based on the provided documents, I do not have enough information to answer this question."
-3. Attribute your statements using bracketed citations corresponding to the passage index, e.g., [1], [2].
-4. Be concise, structured, and factual.
+1. Rely ONLY on the provided context passages. Do NOT use outside knowledge or extrapolate facts.
+2. Use the RECENT CONVERSATION HISTORY (if provided) only to understand follow-up references (such as "it", "that", or "the second point"). Every factual claim in your answer must still come from the CONTEXT PASSAGES.
+3. If the context does not contain enough information to answer the question, clearly state: "Based on the provided documents, I do not have enough information to answer this question."
+4. Attribute your statements using bracketed citations corresponding to the passage index, e.g., [1], [2].
+5. Be concise, structured, and factual.
 """
 
 
-def build_rag_prompt(query: str, context_chunks: List[Dict[str, Any]]) -> Tuple[str, List[Citation]]:
-    """Formats context passages into numbered excerpts and builds the final prompt and citations."""
+def strip_think_tags(text: str) -> str:
+    """Removes <think>...</think> reasoning blocks from prior assistant messages."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+
+def build_rag_prompt(
+    query: str,
+    context_chunks: List[Dict[str, Any]],
+    history: Optional[List[ConversationMessage]] = None,
+) -> Tuple[str, List[Citation]]:
+    """Formats context passages and optional conversation history into the final grounded prompt."""
     context_blocks: List[str] = []
     citations: List[Citation] = []
 
@@ -40,11 +51,23 @@ def build_rag_prompt(query: str, context_chunks: List[Dict[str, Any]]) -> Tuple[
         )
 
     formatted_context = "\n\n".join(context_blocks)
+
+    history_section = ""
+    if history:
+        turns: List[str] = []
+        for msg in history[-6:]:
+            role_label = "User" if msg.role == "user" else "Assistant"
+            cleaned_content = strip_think_tags(msg.content) if msg.role == "assistant" else msg.content.strip()
+            if cleaned_content:
+                turns.append(f"{role_label}: {cleaned_content}")
+        if turns:
+            history_section = "\nRECENT CONVERSATION HISTORY:\n" + "\n".join(turns) + "\n"
+
     prompt = f"""{SYSTEM_PROMPT}
 
 CONTEXT PASSAGES:
 {formatted_context}
-
+{history_section}
 USER QUESTION:
 {query}
 

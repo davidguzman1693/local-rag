@@ -103,7 +103,11 @@ async def query_rag(request: QueryRequest):
     """Standard non-streaming question answering with citations."""
     service = get_rag_service()
     try:
-        response = await service.answer_query(request.query, top_k=request.top_k)
+        response = await service.answer_query(
+            request.query,
+            top_k=request.top_k,
+            history=request.history,
+        )
         return response
     except Exception as e:
         raise HTTPException(
@@ -119,7 +123,11 @@ async def query_rag_stream(request: QueryRequest):
 
     async def event_generator():
         try:
-            async for event in service.stream_query(request.query, top_k=request.top_k):
+            async for event in service.stream_query(
+                request.query,
+                top_k=request.top_k,
+                history=request.history,
+            ):
                 yield f"data: {json.dumps(event)}\n\n"
         except Exception as e:
             error_event = {"type": "error", "message": str(e)}
