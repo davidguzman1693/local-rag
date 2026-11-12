@@ -43,7 +43,27 @@ flowchart LR
 - Node.js >= 20 and npm
 - [Ollama](https://ollama.com/) running locally (`ollama run deepseek-r1:latest` or `qwen2.5:7b`)
 
-### 1. Test the AI Service Pipeline
+### Quickstart (One-Command Orchestration)
+Use the root `Makefile` to run, test, or inspect all 3 services at once:
+```bash
+make start    # Starts ai-service (:8000), core-service (:8080), and web-ui (:5173)
+make status   # Checks health of Ollama, AI Service, Core Gateway, and Web UI
+make logs     # Tails logs from all 3 services (.logs/*.log)
+make test     # Runs unit tests & build checks across Python, Java, and TypeScript
+make stop     # Stops all background services
+```
+
+Or run everything in containers via **Docker Compose** (with host Ollama):
+```bash
+make docker-up
+# Stop with: make docker-down
+```
+
+---
+
+### Manual Per-Service Commands
+
+#### 1. Test the AI Service Pipeline
 ```bash
 cd services/ai-service
 uv run python tests/test_pipeline.py

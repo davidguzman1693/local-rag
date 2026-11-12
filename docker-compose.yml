@@ -1,0 +1,39 @@
+services:
+  ai-service:
+    build:
+      context: ./services/ai-service
+    container_name: local-rag-ai-service
+    ports:
+      - "8000:8000"
+    environment:
+      - LOCAL_RAG_HOST=0.0.0.0
+      - LOCAL_RAG_PORT=8000
+      - LOCAL_RAG_OLLAMA_BASE_URL=http://host.docker.internal:11434
+    volumes:
+      - ./data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  core-service:
+    build:
+      context: ./services/core-service
+    container_name: local-rag-core-service
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_PORT=8080
+      - AI_SERVICE_URL=http://ai-service:8000
+    depends_on:
+      - ai-service
+
+  web-ui:
+    build:
+      context: ./services/web-ui
+      args:
+        - VITE_GATEWAY_URL=http://localhost:8080
+    container_name: local-rag-web-ui
+    ports:
+      - "5173:80"
+    depends_on:
+      - core-service
+
