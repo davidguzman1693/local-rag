@@ -1,5 +1,7 @@
 # Local RAG: Enterprise Polyglot Architecture
 
+[![Polyglot CI Pipeline](https://github.com/davidguzman1693/local-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/davidguzman1693/local-rag/actions/workflows/ci.yml)
+
 A production-grade, local **Retrieval-Augmented Generation (RAG)** platform designed to demonstrate modern AI Engineering patterns across **Java 21**, **Python 3.13**, and **TypeScript**.
 
 ---
