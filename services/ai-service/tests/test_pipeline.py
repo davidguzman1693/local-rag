@@ -8,8 +8,10 @@ sys.path.insert(0, str(src_dir))
 from chunkers import RecursiveCharacterChunker
 from embeddings import EmbeddingService
 from loaders import DocumentLoader
+from schemas import ConversationMessage
 from search import HybridRetriever
 from storage import VectorStore
+from synthesis import build_rag_prompt
 
 
 def run_pipeline_test():
@@ -78,6 +80,21 @@ In enterprise settings, Java often acts as the high-throughput API gateway, Pyth
     print(f"Cross-Encoder re-ranked top {len(reranked)} results:")
     for r in reranked:
         print(f"  - Score: {r['relevance_score']:.4f} | Source: {r['source_filename']} | Text: {r['text'][:80]}...")
+
+    print("\n=== Step 7: Testing Multi-Turn Conversational Prompt Construction ===")
+    history = [
+        ConversationMessage(role="user", content="What is RAG?"),
+        ConversationMessage(
+            role="assistant",
+            content="<think>Internal reasoning here</think>RAG injects verified documents into the prompt [1].",
+        ),
+    ]
+    prompt, citations = build_rag_prompt("What are its key components?", reranked, history=history)
+    assert "RECENT CONVERSATION HISTORY:" in prompt
+    assert "Internal reasoning here" not in prompt
+    assert "RAG injects verified documents into the prompt [1]." in prompt
+    assert len(citations) == len(reranked)
+    print("Multi-turn prompt built and <think> tags stripped cleanly.")
 
     # Cleanup test artifacts
     if test_doc.exists():

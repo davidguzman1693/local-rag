@@ -6,7 +6,14 @@ from chunkers import RecursiveCharacterChunker
 from config import settings
 from embeddings import EmbeddingService
 from loaders import DocumentLoader
-from schemas import Citation, IngestResponse, QueryResponse, RetrievalStageItem, SearchDebugResponse
+from schemas import (
+    Citation,
+    ConversationMessage,
+    IngestResponse,
+    QueryResponse,
+    RetrievalStageItem,
+    SearchDebugResponse,
+)
 from search import HybridRetriever
 from storage import VectorStore
 from synthesis import OllamaClient, build_rag_prompt
@@ -208,16 +215,35 @@ class RagService:
             reranked_results=reranked_items,
         )
 
-    async def answer_query(self, query: str, top_k: Optional[int] = None) -> QueryResponse:
+    @staticmethod
+    def _build_contextual_search_query(
+        query: str,
+        history: Optional[List[ConversationMessage]] = None,
+    ) -> str:
+        """Enriches follow-up questions with the last user question so pronoun references retrieve the right chunks."""
+        if not history:
+            return query
+        prior_user_queries = [m.content.strip() for m in history if m.role == "user" and m.content.strip()]
+        if not prior_user_queries:
+            return query
+        return f"{prior_user_queries[-1]} {query}"
+
+    async def answer_query(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        history: Optional[List[ConversationMessage]] = None,
+    ) -> QueryResponse:
         """Runs retrieval + LLM synthesis and returns a completed answer with citations."""
         start_time = time.perf_counter()
 
-        # Retrieve top passages
-        context_chunks = self.retrieve_context(query, top_k)
+        # Retrieve top passages (using contextualized query when conversation history is present)
+        search_query = self._build_contextual_search_query(query, history)
+        context_chunks = self.retrieve_context(search_query, top_k)
         retrieval_time_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
-        # Build prompt & citations
-        prompt, citations = build_rag_prompt(query, context_chunks)
+        # Build prompt & citations (with conversation history)
+        prompt, citations = build_rag_prompt(query, context_chunks, history=history)
 
         # Generate answer from Ollama
         answer = await self.ollama.generate(prompt, temperature=settings.temperature)
@@ -232,10 +258,16 @@ class RagService:
             model_used=self.ollama.model,
         )
 
-    async def stream_query(self, query: str, top_k: Optional[int] = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def stream_query(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        history: Optional[List[ConversationMessage]] = None,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """Streams generated tokens and yields citations as metadata."""
-        context_chunks = self.retrieve_context(query, top_k)
-        prompt, citations = build_rag_prompt(query, context_chunks)
+        search_query = self._build_contextual_search_query(query, history)
+        context_chunks = self.retrieve_context(search_query, top_k)
+        prompt, citations = build_rag_prompt(query, context_chunks, history=history)
 
         # Yield citations first so the client can render source badges
         yield {

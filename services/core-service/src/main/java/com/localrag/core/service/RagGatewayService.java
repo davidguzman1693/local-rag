@@ -4,9 +4,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.localrag.core.client.AiEngineClient;
+import com.localrag.core.model.ChatMessage;
 import com.localrag.core.model.ChatSession;
 import com.localrag.core.model.ChunkRecord;
 import com.localrag.core.model.Citation;
+import com.localrag.core.model.ConversationTurn;
 import com.localrag.core.model.DocumentSummary;
 import com.localrag.core.model.IngestResponse;
 import com.localrag.core.model.QueryRequest;
@@ -111,7 +113,8 @@ public class RagGatewayService {
 
     public QueryResponse query(QueryRequest request) {
         ChatSession session = chatSessionService.getOrCreateSession(request.sessionId(), request.query());
-        QueryResponse aiResponse = aiEngineClient.query(request);
+        List<ConversationTurn> history = extractRecentHistory(session);
+        QueryResponse aiResponse = aiEngineClient.query(request, history);
         chatSessionService.appendExchange(
                 session.id(),
                 request.query(),
@@ -127,6 +130,7 @@ public class RagGatewayService {
 
     public Flux<ServerSentEvent<String>> streamQuery(QueryRequest request) {
         ChatSession session = chatSessionService.getOrCreateSession(request.sessionId(), request.query());
+        List<ConversationTurn> history = extractRecentHistory(session);
         StringBuilder answerBuffer = new StringBuilder();
         AtomicReference<List<Citation>> capturedCitations = new AtomicReference<>(new ArrayList<>());
 
@@ -134,7 +138,7 @@ public class RagGatewayService {
                 .data("{\"type\":\"session\",\"session_id\":\"" + session.id() + "\"}")
                 .build();
 
-        Flux<ServerSentEvent<String>> aiEventStream = aiEngineClient.streamQuery(request)
+        Flux<ServerSentEvent<String>> aiEventStream = aiEngineClient.streamQuery(request, history)
                 .filter(chunk -> chunk != null && !chunk.isBlank())
                 .doOnNext(chunk -> {
                     try {
@@ -166,5 +170,16 @@ public class RagGatewayService {
                 });
 
         return Flux.concat(Flux.just(sessionEvent), aiEventStream);
+    }
+
+    private List<ConversationTurn> extractRecentHistory(ChatSession session) {
+        if (session == null || session.messages() == null || session.messages().isEmpty()) {
+            return List.of();
+        }
+        List<ChatMessage> msgs = session.messages();
+        int startIdx = Math.max(0, msgs.size() - 6);
+        return msgs.subList(startIdx, msgs.size()).stream()
+                .map(m -> new ConversationTurn(m.role(), m.content()))
+                .toList();
     }
 }

@@ -52,11 +52,21 @@ class Citation(BaseModel):
     relevance_score: float
 
 
+class ConversationMessage(BaseModel):
+    """A single prior turn in a multi-turn conversation."""
+    role: str = Field(description="'user' or 'assistant'")
+    content: str = Field(description="Message text content")
+
+
 class QueryRequest(BaseModel):
     """Input payload for querying the RAG system."""
     query: str = Field(..., min_length=1, description="User's natural language question")
     top_k: Optional[int] = Field(default=None, description="Override default number of chunks to re-rank")
     stream: bool = Field(default=False, description="Whether to stream response tokens")
+    history: Optional[List[ConversationMessage]] = Field(
+        default=None,
+        description="Optional prior conversation turns for multi-turn follow-up questions",
+    )
 
 
 class QueryResponse(BaseModel):
