@@ -2,6 +2,7 @@ import { useEffect, useState, type ChangeEvent } from "react";
 import {
   deleteDocument,
   deleteSession,
+  fetchAvailableModels,
   fetchDocumentChunks,
   fetchDocuments,
   fetchHealth,
@@ -19,6 +20,7 @@ import type {
   ChunkRecord,
   Citation,
   DocumentSummary,
+  OllamaModelInfo,
   SystemHealth,
 } from "./types";
 import "./App.css";
@@ -32,12 +34,17 @@ export function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  // 2. Loading & Error State
+  // 2. Model & Generation Controls
+  const [models, setModels] = useState<OllamaModelInfo[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [temperature, setTemperature] = useState<number>(0.2);
+
+  // 3. Loading & Error State
   const [isUploading, setIsUploading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
-  // 3. Chunk Inspector Modal State
+  // 4. Chunk Inspector Modal State
   const [inspectedDoc, setInspectedDoc] = useState<DocumentSummary | null>(
     null
   );
@@ -54,14 +61,25 @@ export function App() {
 
   async function refreshAll() {
     try {
-      const [healthData, docsData, sessionsData] = await Promise.all([
+      const [healthData, docsData, sessionsData, modelsData] = await Promise.all([
         fetchHealth(),
         fetchDocuments(),
         fetchSessions(),
+        fetchAvailableModels(),
       ]);
       setHealth(healthData);
       setDocuments(docsData);
       setSessions(sessionsData);
+      setModels(modelsData.models);
+
+      // Default the selected model to the server's current default if not set
+      setSelectedModel((prev) => {
+        if (prev && modelsData.models.some((m) => m.name === prev)) {
+          return prev;
+        }
+        return modelsData.current_default || (modelsData.models[0]?.name ?? "");
+      });
+
       if (!activeSessionId && sessionsData.length > 0) {
         setActiveSessionId(sessionsData[0].id);
         setMessages(sessionsData[0].messages);
@@ -174,6 +192,8 @@ export function App() {
       content: "",
       citations: [],
       timestamp: new Date().toISOString(),
+      model: selectedModel || health?.ai_engine?.ollama_model,
+      temperature: temperature,
     };
 
     // Optimistically add both the user message and an empty assistant bubble to the screen
@@ -183,27 +203,35 @@ export function App() {
     let latestCitations: Citation[] = [];
 
     try {
-      await streamRagQuery(query, activeSessionId, (event) => {
-        if (event.type === "session") {
-          setActiveSessionId(event.session_id);
-        } else if (event.type === "citations") {
-          latestCitations = event.citations;
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsgId ? { ...m, citations: latestCitations } : m
-            )
-          );
-        } else if (event.type === "token") {
-          accumulatedText += event.token;
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsgId ? { ...m, content: accumulatedText } : m
-            )
-          );
-        } else if (event.type === "error") {
-          setErrorBanner(event.message);
+      await streamRagQuery(
+        query,
+        activeSessionId,
+        {
+          model: selectedModel || undefined,
+          temperature: temperature,
+        },
+        (event) => {
+          if (event.type === "session") {
+            setActiveSessionId(event.session_id);
+          } else if (event.type === "citations") {
+            latestCitations = event.citations;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId ? { ...m, citations: latestCitations } : m
+              )
+            );
+          } else if (event.type === "token") {
+            accumulatedText += event.token;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId ? { ...m, content: accumulatedText } : m
+              )
+            );
+          } else if (event.type === "error") {
+            setErrorBanner(event.message);
+          }
         }
-      });
+      );
 
       // Refresh session list so the sidebar reflects the newly saved exchange
       const updatedSessions = await fetchSessions();
@@ -244,6 +272,42 @@ export function App() {
           </button>
         </div>
 
+        {/* Dynamic Model Selector & Sampling Temperature Controls */}
+        <div className="model-controls">
+          <label className="model-control-group" title="Select synthesis model from installed Ollama models">
+            <span className="control-label">Model:</span>
+            <select
+              className="select-model"
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              disabled={models.length === 0}
+            >
+              {models.length === 0 ? (
+                <option value="">No models found</option>
+              ) : (
+                models.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.name} {m.details?.parameter_size ? `(${m.details.parameter_size})` : ""}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+
+          <label className="model-control-group" title="Sampling temperature: 0.0 is deterministic/factual, 1.0 is creative">
+            <span className="control-label">Temp: {temperature.toFixed(2)}</span>
+            <input
+              type="range"
+              className="temp-slider"
+              min="0.0"
+              max="1.0"
+              step="0.05"
+              value={temperature}
+              onChange={(e) => setTemperature(parseFloat(e.target.value))}
+            />
+          </label>
+        </div>
+
         <div className="status-pills">
           <span
             className={`status-badge ${
@@ -252,11 +316,6 @@ export function App() {
           >
             Gateway: {health?.status ?? "connecting..."}
           </span>
-          {health?.ai_engine?.ollama_model && (
-            <span className="status-badge">
-              LLM: {health.ai_engine.ollama_model}
-            </span>
-          )}
           <button type="button" className="btn-secondary" onClick={refreshAll}>
             Refresh
           </button>
@@ -388,6 +447,8 @@ export function App() {
               messages={messages}
               isStreaming={isStreaming}
               onSendMessage={handleSendMessage}
+              selectedModel={selectedModel}
+              temperature={temperature}
             />
           ) : (
             <RetrievalDebugger />

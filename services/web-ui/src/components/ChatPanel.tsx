@@ -5,6 +5,8 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   onSendMessage: (query: string) => void;
+  selectedModel?: string;
+  temperature?: number;
 }
 
 /**
@@ -41,6 +43,8 @@ export function ChatPanel({
   messages,
   isStreaming,
   onSendMessage,
+  selectedModel,
+  temperature,
 }: ChatPanelProps) {
   // React state (`useState`): whenever `setInput` is called, React re-renders this component.
   const [input, setInput] = useState("");
@@ -106,7 +110,26 @@ export function ChatPanel({
                 }`}
               >
                 <div className="message-role">
-                  {msg.role === "user" ? "You" : "RAG Assistant"}
+                  {msg.role === "user" ? (
+                    "You"
+                  ) : (
+                    <span className="role-with-meta">
+                      <span>RAG Assistant</span>
+                      {msg.model && (
+                        <span
+                          className="model-badge-inline"
+                          title={`Synthesized with ${msg.model} (temperature: ${
+                            msg.temperature !== undefined ? msg.temperature : "default"
+                          })`}
+                        >
+                          {msg.model}
+                          {msg.temperature !== undefined
+                            ? ` · T=${msg.temperature.toFixed(2)}`
+                            : ""}
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </div>
 
                 {/* Collapsible reasoning block for reasoning models like DeepSeek-R1 */}
@@ -185,7 +208,11 @@ export function ChatPanel({
         <input
           type="text"
           className="chat-input"
-          placeholder="Ask a question about your documents..."
+          placeholder={
+            selectedModel
+              ? `Ask a question using ${selectedModel} (T=${temperature?.toFixed(2) ?? "0.20"})...`
+              : "Ask a question about your documents..."
+          }
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={isStreaming}

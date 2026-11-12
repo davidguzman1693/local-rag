@@ -11,6 +11,7 @@ import com.localrag.core.model.Citation;
 import com.localrag.core.model.ConversationTurn;
 import com.localrag.core.model.DocumentSummary;
 import com.localrag.core.model.IngestResponse;
+import com.localrag.core.model.ModelListResponse;
 import com.localrag.core.model.QueryRequest;
 import com.localrag.core.model.QueryResponse;
 import com.localrag.core.model.SearchDebugResponse;
@@ -98,6 +99,10 @@ public class RagGatewayService {
                     );
                 })
                 .toList();
+    }
+
+    public ModelListResponse listModels() {
+        return aiEngineClient.listModels();
     }
 
     public List<ChunkRecord> getDocumentChunks(String documentId) {

@@ -6,6 +6,9 @@ import com.localrag.core.model.ChatSession;
 import com.localrag.core.model.Citation;
 import com.localrag.core.model.DocumentSummary;
 import com.localrag.core.model.IngestResponse;
+import com.localrag.core.model.ModelDetails;
+import com.localrag.core.model.ModelListResponse;
+import com.localrag.core.model.OllamaModelInfo;
 import com.localrag.core.model.QueryRequest;
 import com.localrag.core.model.QueryResponse;
 import com.localrag.core.persistence.ChatSessionRepository;
@@ -127,5 +130,15 @@ class CoreServiceApplicationTests {
         assertThat(docs.get(0).fileSizeBytes()).isEqualTo(15L);
         assertThat(docs.get(0).uploadedAt()).isNotNull();
         assertThat(docs.get(1).fileSizeBytes()).isNull();
+
+        // 4. Model listing retrieves installed Ollama models
+        when(mockClient.listModels()).thenReturn(new ModelListResponse(
+                List.of(new OllamaModelInfo("deepseek-r1:latest", 4683075271L, "2025-02-03", new ModelDetails("7.6B", "Q4_K_M", "qwen2"))),
+                "deepseek-r1:latest"
+        ));
+        ModelListResponse modelResponse = gatewayService.listModels();
+        assertThat(modelResponse.models()).hasSize(1);
+        assertThat(modelResponse.models().get(0).name()).isEqualTo("deepseek-r1:latest");
+        assertThat(modelResponse.currentDefault()).isEqualTo("deepseek-r1:latest");
     }
 }

@@ -83,11 +83,29 @@ class OllamaClient:
         self.base_url = base_url.rstrip("/")
         self.model = model
 
-    async def generate(self, prompt: str, temperature: float = 0.2) -> str:
+    async def list_models(self) -> List[Dict[str, Any]]:
+        """Queries Ollama /api/tags to list installed models."""
+        url = f"{self.base_url}/api/tags"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                data = response.json()
+                return data.get("models", [])
+        except Exception:
+            return []
+
+    async def generate(
+        self,
+        prompt: str,
+        temperature: float = 0.2,
+        model: Optional[str] = None,
+    ) -> str:
         """Sends a non-streaming generation request to Ollama."""
         url = f"{self.base_url}/api/generate"
+        target_model = model or self.model
         payload = {
-            "model": self.model,
+            "model": target_model,
             "prompt": prompt,
             "stream": False,
             "options": {"temperature": temperature},
@@ -95,15 +113,27 @@ class OllamaClient:
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(url, json=payload)
-            response.raise_for_status()
+            if response.status_code != 200:
+                try:
+                    err_json = response.json()
+                    err_msg = err_json.get("error", response.text)
+                except Exception:
+                    err_msg = response.text
+                raise RuntimeError(f"Ollama model '{target_model}' error ({response.status_code}): {err_msg}")
             data = response.json()
             return data.get("response", "")
 
-    async def generate_stream(self, prompt: str, temperature: float = 0.2) -> AsyncGenerator[str, None]:
+    async def generate_stream(
+        self,
+        prompt: str,
+        temperature: float = 0.2,
+        model: Optional[str] = None,
+    ) -> AsyncGenerator[str, None]:
         """Streams generated tokens from Ollama as Server-Sent Events / chunks."""
         url = f"{self.base_url}/api/generate"
+        target_model = model or self.model
         payload = {
-            "model": self.model,
+            "model": target_model,
             "prompt": prompt,
             "stream": True,
             "options": {"temperature": temperature},
@@ -111,7 +141,14 @@ class OllamaClient:
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream("POST", url, json=payload) as response:
-                response.raise_for_status()
+                if response.status_code != 200:
+                    err_bytes = await response.aread()
+                    try:
+                        err_json = json.loads(err_bytes.decode())
+                        err_msg = err_json.get("error", err_bytes.decode())
+                    except Exception:
+                        err_msg = err_bytes.decode()
+                    raise RuntimeError(f"Ollama model '{target_model}' error ({response.status_code}): {err_msg}")
                 async for line in response.aiter_lines():
                     if line:
                         chunk_json = json.loads(line)

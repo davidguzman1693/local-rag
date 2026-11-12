@@ -4,6 +4,7 @@ import com.localrag.core.model.ChunkRecord;
 import com.localrag.core.model.ConversationTurn;
 import com.localrag.core.model.DocumentSummary;
 import com.localrag.core.model.IngestResponse;
+import com.localrag.core.model.ModelListResponse;
 import com.localrag.core.model.QueryRequest;
 import com.localrag.core.model.QueryResponse;
 import com.localrag.core.model.SearchDebugResponse;
@@ -74,6 +75,20 @@ public class AiEngineClient {
             throw new AiServiceException("AI Engine failed to ingest document: " + e.getResponseBodyAsString(), e.getStatusCode());
         } catch (Exception e) {
             throw new AiServiceException("Error communicating with AI Engine during upload: " + e.getMessage(), e);
+        }
+    }
+
+    public ModelListResponse listModels() {
+        try {
+            return webClient.get()
+                    .uri("/api/v1/models")
+                    .retrieve()
+                    .bodyToMono(ModelListResponse.class)
+                    .block();
+        } catch (WebClientResponseException e) {
+            throw new AiServiceException("Failed to fetch models from AI Engine: " + e.getResponseBodyAsString(), e.getStatusCode());
+        } catch (Exception e) {
+            throw new AiServiceException("Error communicating with AI Engine: " + e.getMessage(), e);
         }
     }
 
@@ -180,6 +195,12 @@ public class AiEngineClient {
         }
         if (history != null && !history.isEmpty()) {
             payload.put("history", history);
+        }
+        if (request.model() != null && !request.model().isBlank()) {
+            payload.put("model", request.model().trim());
+        }
+        if (request.temperature() != null) {
+            payload.put("temperature", request.temperature());
         }
         return payload;
     }

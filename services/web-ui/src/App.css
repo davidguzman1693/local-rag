@@ -74,6 +74,51 @@ body {
   gap: 0.5rem;
 }
 
+/* Model Selector & Temperature Controls */
+.model-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.75rem;
+  border-radius: 8px;
+}
+
+.model-control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.control-label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.select-model {
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.select-model:focus {
+  border-color: var(--accent);
+}
+
+.temp-slider {
+  width: 75px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
 .status-badge {
   font-size: 0.75rem;
   padding: 0.25rem 0.6rem;
@@ -282,6 +327,24 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+.role-with-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.model-badge-inline {
+  text-transform: none;
+  font-weight: 400;
+  font-size: 0.7rem;
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
 }
 
 .message-text {
